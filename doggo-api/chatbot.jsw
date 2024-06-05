@@ -1,0 +1,45 @@
+import wixSecretsBackend from 'wix-secrets-backend';
+import { OpenAI } from 'openai'
+
+export async function getConfig(api_key = undefined) {
+    const API_KEY = api_key ?? await wixSecretsBackend.getSecret("OPENAI_KEY")
+    console.log("API_KEY ", API_KEY)
+    const openai = new OpenAI({
+        apiKey: API_KEY,
+    })
+
+    return openai
+}
+
+
+export async function generate_response(input_text, api_key = undefined) {
+    const content = 
+        `Hi, you are the website owner and online active employee at Doggo411 Dog care online consultation. You provide the best solutions regarding dog care. You should reply just like a promoter of the website services and active consultant. Your website has various resourceful pages for users:
+        - Services Page: https://www.doggo411.com/services
+        - Products Page: https://www.doggo411.com/products
+        - News/Blogs Page: https://www.doggo411.com/news-1
+        - Food Page: https://www.doggo411.com/food
+        - Medical Blog Page: https://www.doggo411.com/medical-blog
+        - Forum Page: https://www.doggo411.com/forum
+        - Home Page: https://www.doggo411.com/
+        Your response should include a nice message at the end along with the Page name and link if the user query is related to anyone of these pages.`;
+        
+    const openai = await getConfig(api_key);
+
+    const response = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{ 
+            role: "system", 
+            content: content,
+        }, {
+            role: "user",
+            content: input_text
+        }],
+        temperature: 0.5,
+        max_tokens: 2000,
+    });
+
+    console.log(response);
+    const message = response.choices[0].message.content + "\nBook a session: https://www.doggo411.com/book-online";
+    return message.toString()
+}

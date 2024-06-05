@@ -1,0 +1,55 @@
+dl[data-hook="TotalsSectionDataHooks.TaxRow"] > dt > span[data-hook="total-row-title"]:after {
+    background-image: url("https://static.wixstatic.com/shapes/f1719c_705a4ebadc0f423f86494c12aeb3f1ab.svg");
+    background-position: center;
+    background-size: contain;
+    width: 1rem;
+    height: 1rem;
+    content: "\2800";
+    background-repeat: no-repeat;
+    position: absolute;
+    margin-left: 4px;
+    top: 50%;
+    transform: translateY(-45%);
+    cursor: pointer;
+}
+
+dl[data-hook="TotalsSectionDataHooks.TaxRow"] > dt > span[data-hook="total-row-title"] {
+    position: relative;
+}
+
+dl[data-hook="TotalsSectionDataHooks.TaxRow"] > dt > span[data-hook="total-row-title"]:before {
+    width: 270px;
+    opacity: 0;
+    z-index: -1;
+    content: "Tax applicable in select states where your order is shipped and will be calculated at checkout.";
+    position: absolute;
+    /* left: 100%; */
+    bottom: 100%;
+    line-height: 1.2;
+    padding: 9px;
+    font-size: 0.875rem;
+    background: white;
+    border-radius: 5px;
+    color: black;
+    transform: translateY(-4%);
+    cursor: pointer;
+    /* box-shadow: 0px 1px 2px 0px black; */
+}
+
+
+dl[data-hook="TotalsSectionDataHooks.TaxRow"] > dt > span[data-hook="total-row-title"]:hover:before {
+    opacity: 1;
+    z-index: 1;
+}
+
+@media (min-width: 480px) and (max-width: 320px) {
+    dl[data-hook="TotalsSectionDataHooks.TaxRow"] > dt > span[data-hook="total-row-title"]:before {
+        width: 320px;
+    }
+}
+
+@media only screen and (max-width: 750px) {
+    aside[data-hook="LayoutDataHooks.oneColumnViewSummary"] {
+        display: none !important;
+    }
+}

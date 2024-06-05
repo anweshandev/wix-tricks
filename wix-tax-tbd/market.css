@@ -1,0 +1,19 @@
+button[aria-label="Add to Cart"]{
+  display:none!important
+}
+
+._1ZOt-{
+  display:none;
+}
+
+.custom-link{
+  text-decoration:none !important;
+  display:inline-block;
+  background-color:#000;
+  color:#fff!important;
+  padding:10px 70px;
+  border-radius:5px;
+  margin-top:25px;
+  min-width:100px;
+  text-align: center;
+}

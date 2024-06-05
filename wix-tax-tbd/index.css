@@ -1,0 +1,3 @@
+dl[data-hook="TotalsSectionDataHooks.TaxRow"] > dd:first-child {
+    visibility: none !important;
+}
