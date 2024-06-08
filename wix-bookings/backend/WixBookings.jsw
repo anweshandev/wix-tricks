@@ -1,0 +1,27 @@
+import { availabilityCalendar, bookings } from 'wix-bookings.v2';
+
+export async function queryAvailability(serviceId, options) {
+  const query = {
+    "filter": {
+        "serviceId": serviceId,
+        "startDate": new Date(),
+        "endDate": new Date(new Date().setDate(new Date().getDate() + 30)),
+        "bookable": true
+    }
+  }
+  console.log('query:', query);
+  try {
+    return (await availabilityCalendar.queryAvailability(query, options)).availabilityEntries;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+export async function createBooking(booking, options) {
+  try {
+      const result = await bookings.createBooking(booking, options);
+      return result;
+  } catch (error) {
+      console.error(error);
+  }
+}

@@ -1,0 +1,20 @@
+import { checkout } from 'wix-ecom-backend';
+
+export async function createCheckout(options) {
+  try {
+    const newCheckout = await checkout.createCheckout(options);
+    console.log('Success! Checkout created, checkout:', newCheckout);
+    return newCheckout;
+  } catch (error) {
+    console.error(error);
+    // Handle the error
+  }
+}    
+
+export async function getCheckoutUrl(id) {
+    try {
+        return await checkout.getCheckoutUrl(id);
+    } catch (error) {
+        console.error(error);
+    }
+ }
