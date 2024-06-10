@@ -1,0 +1,73 @@
+/*
+* Prefixed by https://autoprefixer.github.io
+* PostCSS: v8.4.14,
+* Autoprefixer: v10.4.7
+* Browsers: last 4 version
+*/
+
+.plan-box {
+    --black: 0, 0, 0, 1;
+    margin-top: 8px;
+    border: 1px #c9c9c9 solid;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    padding: 16px;
+    cursor: pointer;
+    background-color: #fff;
+    direction: var(--wix-direction);
+    text-align: start;
+    color: #444;
+    gap: 7px;
+    -webkit-box-align: center;
+        -ms-flex-align: center;
+            align-items: center;
+    -webkit-transition: background-color .2s ease-in-out, border-color .2s ease-in-out, color .2s ease-in-out;
+    -o-transition: background-color .2s ease-in-out, border-color .2s ease-in-out, color .2s ease-in-out;
+    transition: background-color .2s ease-in-out, border-color .2s ease-in-out, color .2s ease-in-out;
+    -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+}
+
+.plan-name {
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.plan-tagline {
+    font-size: 12px;
+    line-height: 1.33;
+    margin-bottom: 8px;
+}
+
+.plan-price {
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.circle {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #000;
+    border-radius: 50%;
+    display: block;
+    -webkit-transition: background-color .2s ease-in-out, opacity .2s ease-in-out;
+    -o-transition: background-color .2s ease-in-out, opacity .2s ease-in-out;
+    transition: background-color .2s ease-in-out, opacity .2s ease-in-out;
+    -webkit-transform: scale(0.75);
+        -ms-transform: scale(0.75);
+            transform: scale(0.75);
+}
+
+.checked {
+    width: 18px !important;
+    -webkit-transform: scale(0.5) !important;
+        -ms-transform: scale(0.5) !important;
+            transform: scale(0.5) !important;
+    background-color: #000;
+    -webkit-box-shadow: 0 0 2px #888;
+            box-shadow: 0 0 2px #888;
+    background-clip: content-box;
+    padding: 3px;
+    border-color: #000000;
+}

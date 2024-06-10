@@ -1,0 +1,235 @@
+import { accounts } from 'wix-loyalty.v2';
+import * as wixAuth from 'wix-auth';
+import { v4 as uuidv4 } from 'uuid';
+
+const LOYALTY_APP_ID = '553c79f3-5625-4f38-b14b-ef7c0d1e87df';
+
+export function createLoyaltyAccount(contactId) {
+    const createAccount = wixAuth.elevate(accounts.createAccount)
+    return createAccount(contactId).then(({ account: { _id } }) => {
+        return _id
+    });
+}
+
+export function getLoyaltyAccount(id) {
+    const getAccountBySecondaryId = wixAuth.elevate(accounts.getAccountBySecondaryId);
+
+    let key = "contactId";
+
+    return getAccountBySecondaryId({
+        [key]: id,
+    }).then((res) => {
+        if (res.account) {
+            return res?.account?._id;
+        } else {
+            return false;
+        }
+    }).catch((err) => {
+        return false;
+    });
+}
+
+export function getRewards(id, quantity = 1) {
+    const rewards = {
+        "3734d679-6773-be7f-ff02-e7b08315cb25": 200,
+        "37b71638-aace-468f-91c3-44f04fc00876": 200,
+        "b5d23057-aa7e-24c0-230e-6253b97180e9": 200,
+        "01dd9847-c096-0480-7d57-b263062a60a7": 50,
+        "d094eea3-7fff-c37b-814b-df295b69c252": 50,
+        "3fe81feb-4c11-f10c-4e76-1e4e103c1f60": 50,
+        "0e142457-2847-133d-67c6-dd49d7a7d769": 100,
+        "7e5934a5-6a9b-92f4-9ba4-2fb684aa35d2": 100,
+        "de741443-a2c0-168e-4630-d406efbb2ae9": 100,
+    }
+
+    let points = 0;
+
+    if (id in rewards) {
+        points = rewards[id] * quantity;
+    }
+
+    return points;
+}
+
+/**
+ * @param {String} memberId The identity of the member or contact
+ * @param {number} points The number of points to credit
+ * @param {String} description The description of event for which the points are being credited
+ */
+export async function addPoints(memberId, points, description = "", appId = LOYALTY_APP_ID) {
+    let accountId = await getLoyaltyAccount(memberId);
+    const idempotencyKey = uuidv4();
+    const earnPoints = wixAuth.elevate(accounts.earnPoints);
+
+    if (accountId === false) {
+        console.log(accountId, " This is not found for ", memberId, " Creating one...");
+        accountId = await createLoyaltyAccount(memberId);
+
+        if (accountId) {
+            // Okay
+            console.log(accountId);
+        } else {
+            console.error("Something went wrong");
+        }
+    }
+
+    appId = appId ?? LOYALTY_APP_ID;
+    description = description ?? "";
+
+    if (points < 1 || points > 9999999) {
+        throw RangeError(`The points should be between 1 & 9999999`);
+    }
+
+    accountId = accountId.toString();
+    return earnPoints(accountId, {
+        appId,
+        idempotencyKey,
+        amount: points,
+        description,
+    }).then(res => {
+        return true;
+    }).catch(() => {
+        return false
+    })
+
+}
+
+export function givePointsToBox(buyerInfo, lineItems) {
+
+    const { id: contactId } = buyerInfo;
+    const item = lineItems[0];
+    const { productId, quantity = 1, name } = item;
+
+    const points = getRewards(productId, quantity);
+    const description = `${points} points credited for the subscription of ${name}.`;
+
+    addPoints(contactId, points, description, LOYALTY_APP_ID);
+
+    return true;
+
+}
+
+export function getRollsPurchased(inputString) {
+    // Regular expression to match any number in the string
+    const regex = /\d+/;
+
+    // Extract the first number from the string
+    const match = inputString.match(regex);
+
+    // If a number is found, return it; otherwise, default to 1
+    return match ? parseInt(match[0], 10) : 1;
+}
+
+const STANDARD_PONTS = 25;
+
+export function getPointsFromItems(items) {
+
+    let points = 0;
+
+    for (let i = 0; i < items.length; i++) {
+        let item = items[i];
+        let options = Array.isArray(item.options) ? item.options : [];
+        let selection = options?.selection ?? ""
+
+        let purchased = getRollsPurchased(selection) * (item?.quantity ?? 1) * STANDARD_PONTS;
+
+        points += purchased;
+    }
+
+    return points;
+}
+
+import wixData from 'wix-data';
+
+export function isProductMerch(id) {
+    return wixData.query("Stores/Products").eq("_id", id).include("collections").find().then((res) => {
+        let i = res.items[0].collections.map(collection => collection.name);
+        i = i.includes("Master Merch");
+
+        if (i == true) {
+            return true;
+        }
+
+        return false;
+    })
+}
+
+export async function applyForSubscription(_id, lineItems, buyerInfo) {
+
+    const recentOrderRes = await wixData.query("mmo").eq("recentOrderId", _id).count({
+        suppressAuth: true,
+        consistentRead: true,        
+    })
+
+    if(recentOrderRes === 1) {
+        return false;
+    }
+
+    let noMerch = false;
+    let points = 0;
+
+    for (let i = 0; i < lineItems.length; i++) {
+
+        const prod = lineItems[i];
+        const productId = prod.productId;
+
+        if (!(await isProductMerch(productId))) {
+            
+            let options = Array.isArray(prod.options) ? prod.options : [];
+            let selection = options?.selection ?? ""
+            
+            // Calculate the point too based on the variant!
+            
+            points += getRollsPurchased(selection) * (prod?.quantity ?? 1) * STANDARD_PONTS;
+            
+            noMerch = true;
+        }
+    }
+
+    if (noMerch) {
+        let dt_obj = new Date();
+        let timeZone = "America/Los_Angeles"
+
+        let day = dt_obj.getDate();
+
+        let db_date = Intl.DateTimeFormat('fr-CA', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            timeZone,
+        }).format(dt_obj);
+
+        await wixData.insert("Orders", {
+            firstOrderId: _id,
+            recentOrderId: _id,
+            placedOn: db_date,
+            day,
+        }, {
+            suppressAuth: true
+        });
+
+
+        const { id: contactId } = buyerInfo;
+
+        await addPoints(contactId, points, "Automatic mix and match order placed");
+
+        return true;
+    }
+
+    return true;
+}
+
+
+export function getTotals(items, location) {
+    let subtotal = 0;
+
+    for (let i = 0; i < items.length; i++) {
+        let item = items[i];
+
+        subtotal += item?.totalPrice;
+    }
+
+
+
+    return subtotal;
+}
