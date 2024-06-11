@@ -1,67 +1,77 @@
 
-import { givePointsToBox, applyForSubscription } from "backend/plan";
+import { givePointsToBox, givePointsToItems } from "backend/plan";
+import { createOrderbyHook } from "backend/pricing";
 
 export function wixStores_onOrderPaid(event) {
     
-    if(event["paymentStatus"] === "PAID" && (typeof event["subscriptionInfo"] !== "object" || !("id" in event["subscriptionInfo"]))) {
-
-        // Grab the id and push the code
-        const _id = event["_id"];
-
-        const lineItems = event["lineItems"];
-        const buyerInfo = event["buyerInfo"]
-
-        const rewards = {
-            "3734d679-6773-be7f-ff02-e7b08315cb25": 200,
-            "37b71638-aace-468f-91c3-44f04fc00876": 200,
-            "b5d23057-aa7e-24c0-230e-6253b97180e9": 200,
-            "01dd9847-c096-0480-7d57-b263062a60a7": 50,
-            "d094eea3-7fff-c37b-814b-df295b69c252": 50,
-            "3fe81feb-4c11-f10c-4e76-1e4e103c1f60": 50,
-            "0e142457-2847-133d-67c6-dd49d7a7d769": 100,
-            "7e5934a5-6a9b-92f4-9ba4-2fb684aa35d2": 100,
-            "de741443-a2c0-168e-4630-d406efbb2ae9": 100,
-        }
+    const lineItems =  event["lineItems"];
+    const buyerInfo = event.buyerInfo;
 
 
-        let lineItems1 = [];
-
-        let lineItems2 = [];
-
-        for( let i = 0; i < lineItems.length; i++) {
-
-            const productId = lineItems[i].productId
-
-            if ( productId in rewards ) {
-                // line items 1 => All boxes
-                lineItems1.push(lineItems[i])
-            } else {
-                // line items 2 => All mix and matches.
-                lineItems2.push(lineItems2[i])
-            }
-
-        }
-
-        if(Array.isArray(lineItems1) && lineItems1.length > 0) {
-            givePointsToBox(buyerInfo, lineItems1);
-        }
-
-        if(Array.isArray(lineItems2) &&lineItems2.length > 0) {
-            applyForSubscription(_id, lineItems2, buyerInfo)
-        }
-
-
-    }
-    else if(event["paymentStatus"] === "PAID" && typeof event["subscriptionInfo"] === "object" && "id" in event["subscriptionInfo"]) {
-        // Should be a person which has selected some subscription
-
-        const lineItems =  event["lineItems"];
-
-        const buyerInfo = event.buyerInfo;
-
+    if(event["paymentStatus"] === "PAID" && typeof event["subscriptionInfo"] === "object" && "id" in event["subscriptionInfo"]) {
+        // Should be a person which has selected some subscriptio
         // check subscription thingy...
+        // definitely a box
         givePointsToBox(buyerInfo, lineItems);
+        return;
     }
 
 
+    if(event["paymentStatus"] === "PAID" && (typeof event["subscriptionInfo"] !== "object" || !("id" in event["subscriptionInfo"]))) {
+        givePointsToItems(buyerInfo, lineItems);
+    }
+
+
+}
+
+
+let queue = [];
+
+import wixData from 'wix-data';
+
+export function wixPricingPlans_onOrderUpdated(event) {
+
+    const order = event.data.order;
+    const planId = order.planId;
+
+    if(queue.indexOf(planId) !== -1) return;
+    queue.push(planId);
+
+    const orderId = order._id;
+
+    const paymentStatus = order.paymentStatus;
+
+    const status = order.status;
+
+    const buyer = order.buyer;
+
+    if(status === "ACTIVE" && paymentStatus === "PAID") {
+        wixData.query("CustomPlans").eq("planId", planId).find().then( (res) => {
+            if(res.items.length >= 1) {
+                let item = res.items[0];
+
+                if(item.used !== true) {
+                    // Then we need to update the order id, this is the first time
+                    wixData.update("CustomPlans", {
+                        ...item,
+                        orderId: orderId
+                    });
+
+                    item.orderId = orderId;
+                }
+
+                if(item.orderId === orderId) {
+                    let contactId = buyer.contactId;
+                    let databaseId = item._id;
+
+                    createOrderbyHook(contactId, databaseId);
+                }
+
+            }
+        });
+    }
+
+
+
+    console.log("Charged");
 }

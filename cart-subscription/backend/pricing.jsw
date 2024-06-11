@@ -1,0 +1,332 @@
+import wixPricingPlansBackend from 'wix-pricing-plans-backend';
+import wixSiteBackend from 'wix-site-backend';
+import wixData from 'wix-data';
+import { cart, checkout } from 'wix-ecom-backend';
+import * as wixAuth from 'wix-auth';
+import crm from 'wix-crm-backend';
+import wixStoresBackend from 'wix-stores-backend';
+
+
+export async function createDescription(arr = []) {
+    let description = [];
+    for (let i = 0; i < arr.length; i++) {
+        let item = arr[i];
+
+        let str = `${item.name}`;
+
+        if (item.options.length >= 1) {
+            let option = item.options[0].selection;
+
+            str = `${str} (${option})`;
+        }
+
+        str = `${str} x ${item.quantity}`;
+
+        description.push(str);
+    }
+
+    let desc = description.join(",");
+
+    return desc;
+}
+
+export async function createPlan(price, name, description) {
+
+    const createPlan = wixAuth.elevate(wixPricingPlansBackend.createPlan)
+
+    return createPlan({
+        name,
+        description,
+        buyerCanCancel: true,
+        maxPurchasesPerBuyer: 1,
+        public: true,
+        allowFutureStartDate: false,
+        termsAndConditions: "https://www.shipthelip.com/termsconditions",
+        pricing: {
+            subscription: {
+                cycleCount: 0,
+                cycleDuration: {
+                    count: 1,
+                    unit: "MONTH"
+                }
+            },
+            price: {
+                currency: await wixSiteBackend.generalInfo.getPaymentCurrency(),
+                value: price.toString()
+            }
+        }
+    }).then((planInfo) => {
+        return planInfo;
+    }).catch(err => false)
+}
+
+export async function updatePlan(planId, price, planInfo = {}) {
+
+    const updatePlan = wixAuth.elevate(wixPricingPlansBackend.updatePlan)
+
+    const getPlan = wixAuth.elevate(wixPricingPlansBackend.getPlan);
+
+    const info = await getPlan(planId);
+
+    info.pricing.price.value = price.toString();
+
+    let pInfo = {
+        _id: "",
+        ...info,
+        ...planInfo,
+    };
+
+    return updatePlan(pInfo).then((res) => res).catch(() => false);
+}
+
+export function getCheckoutCode(planId) {
+    let buff = Buffer.from(`{"integrationData":{},"planId":"${planId}"}`).toString("base64");
+    //@ts-ignore
+    buff = buff.split("").filter((i) => i !== "=");
+    //@ts-ignore
+    buff = buff.join("")
+    return buff;
+}
+
+export function getURI(planId) {
+    return `/plans-pricing/payment/${getCheckoutCode(planId)}`
+}
+
+export async function getCheckoutUrl(cartId) {
+
+    const createCheckout = wixAuth.elevate(cart.createCheckout);
+    const getCheckoutUrl = wixAuth.elevate(checkout.getCheckoutUrl);
+
+    const res = await createCheckout(cartId, {
+        // @ts-ignore
+        channelType: "WIX_APP_STORE",
+    });
+
+    const checkoutId = res.checkoutId;
+
+    const url = await getCheckoutUrl(checkoutId);
+
+    return {
+        checkoutId: checkoutId,
+        checkoutUrl: url.checkoutUrl,
+    }
+}
+
+export async function removeCartLineItems(cartId) {
+    // let cartId = "2b851250-7e98-4f6a-b16e-e668545e122a";
+
+    const getCart = wixAuth.elevate(cart.getCart);
+    const removeLineItems = wixAuth.elevate(cart.removeLineItems);
+    
+
+    let res = (await getCart(cartId).then((r) => r).catch(() => false));
+
+    if (res !== false) {
+        //@ts-ignore;
+        let arr = res?.lineItems ?? [];
+
+        arr = arr.map((item) => item._id);
+
+        await removeLineItems(cartId, arr);
+    }
+
+    console.log(res);
+}
+
+export async function createOrderbyHook(contactId, databaseId) {
+
+    const getContactById = wixAuth.elevate(crm.contacts.getContact);
+    const updateCheckout = wixAuth.elevate(checkout.updateCheckout);
+    const markAsCompleted = wixAuth.elevate(checkout.markCheckoutAsCompleted);
+
+    const dataRes = await wixData.get("CustomPlans", databaseId, {
+        suppressAuth: true,
+    });
+
+    const lineItems = dataRes.lineItems;
+    const totals = dataRes.totals;
+    const checkoutId = dataRes.checkoutId;
+    const cartId = dataRes.cartId;
+
+
+    const inUse = dataRes?.used ?? false;
+
+    const contact = await getContactById(contactId, {
+        suppressAuth: true
+    })
+
+    
+    let email = ""; let phone = ""
+
+    //@ts-ignore
+    email = contact.info.emails.filter( (eml) => eml.primary );
+    //@ts-ignore
+    email = email.map( (eml) => eml.email)
+
+    if(email.length === 1) {
+        //@ts-ignore
+        email = email[0];
+    }
+
+    //@ts-ignore
+    phone = contact.info.phones.filter( (ph) => ph.primary );
+    //@ts-ignore
+    phone = phone.map( (ph) => ph.phone );
+
+    if(phone.length === 1) {
+        //@ts-ignore
+        phone = phone[0];
+    }
+
+
+
+    if(!inUse) {
+
+        try {
+            await wixData.update({
+                ...dataRes,
+                used: true,
+            });
+        } catch(err) {
+            //
+        }
+        
+
+        // Mark the checkout complete
+        try {
+            await updateCheckout(checkoutId, {
+                buyerInfo: {
+                    contactId,
+                }
+            })
+        } catch(err) {
+            //
+        }
+
+        try {
+            //@ts-ignore
+            await markAsCompleted(checkoutId);
+        }catch(err) {
+            //
+        }
+
+
+        // remove everything from cart
+        try {
+            //@ts-ignore
+            await removeCartLineItems(cartId);
+        } catch(err) {
+            //
+        }
+
+    }
+
+
+    let billing = {
+        addressLine1: "",
+        addressLine2: "",
+        city: "",
+        country: "",
+        postalCode: "",
+        subdivision: "",
+        streetAddress: ""
+    }, shipping = {
+        addressLine1: "",
+        addressLine2: "",
+        city: "",
+        country: "",
+        postalCode: "",
+        subdivision: "",
+        streetAddress: ""
+    };
+
+    let addresses = contact.info.addresses.filter( (address) => {
+        if(address.tag === "BILLING") {
+            //@ts-ignore
+            billing = {
+                ...billing,
+                ...address.address,
+            };
+        } else if( address.tag === "SHIPPING" ) {
+            //@ts-ignore
+            shipping = {
+                ...shipping,
+                ...address.address,
+            };
+        } else {
+            //
+        }
+        return address.tag === "BILLING" || address.tag === "SHIPPING"
+    });
+
+    let lt = [];
+
+    for(let l = 0; l < lineItems.length; l++) {
+        const { name, weight ,quantity, productId, price, options, mediaItem: { src }} = lineItems[l];
+        lt.push({
+            name,
+            quantity,
+            productId,
+            priceData: {
+                price,
+                taxIncludedInPrice: false,
+            },
+            mediaItem: {
+                "src": src,
+            },
+            lineItemType: "PHYSICAL",
+            weight: weight,
+            options: options
+        })
+    }
+
+    // const createOrder = wixAuth.elevate(orders.createOrder);
+    try {
+
+        
+        await wixStoresBackend.createOrder({
+            lineItems: lt,
+            channelInfo: {
+                "type": "WEB"
+            },
+            totals: totals,
+            paymentStatus: "PAID",
+            cartId: cartId,
+            buyerInfo: {
+                identityType: "CONTACT",
+                id: contactId
+            },
+            buyerLanguage: "en",
+            billingInfo: {
+                address: {
+                    addressLine: billing.addressLine1,
+                    addressLine2: billing.addressLine2,
+                    city: billing.city,
+                    country: billing.country,
+                    postalCode: billing.postalCode,
+                    subdivision: billing.subdivision,
+                },
+                email: email,
+                firstName: contact.info.name.first,
+                lastName: contact.info.name.last,
+                phone: phone,
+            },
+            shippingInfo: {
+                shipmentDetails: {
+                    address: {
+                        addressLine: shipping.addressLine1,
+                        addressLine2: shipping.addressLine2,
+                        city: shipping.city,
+                        country: shipping.country,
+                        postalCode: shipping.postalCode,
+                        subdivision: shipping.subdivision,
+                    }
+                }
+            }
+        })
+
+        
+    } catch (err) {
+        console.log(err);
+    }
+}

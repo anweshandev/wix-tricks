@@ -1,8 +1,21 @@
 import { accounts } from 'wix-loyalty.v2';
 import * as wixAuth from 'wix-auth';
 import { v4 as uuidv4 } from 'uuid';
+import wixData from 'wix-data';
 
 const LOYALTY_APP_ID = '553c79f3-5625-4f38-b14b-ef7c0d1e87df';
+const STANDARD_PONTS = 25;
+const REWARDS = {
+        "3734d679-6773-be7f-ff02-e7b08315cb25": 200,
+        "37b71638-aace-468f-91c3-44f04fc00876": 200,
+        "b5d23057-aa7e-24c0-230e-6253b97180e9": 200,
+        "01dd9847-c096-0480-7d57-b263062a60a7": 50,
+        "d094eea3-7fff-c37b-814b-df295b69c252": 50,
+        "3fe81feb-4c11-f10c-4e76-1e4e103c1f60": 50,
+        "0e142457-2847-133d-67c6-dd49d7a7d769": 100,
+        "7e5934a5-6a9b-92f4-9ba4-2fb684aa35d2": 100,
+        "de741443-a2c0-168e-4630-d406efbb2ae9": 100,
+}
 
 export function createLoyaltyAccount(contactId) {
     const createAccount = wixAuth.elevate(accounts.createAccount)
@@ -29,27 +42,6 @@ export function getLoyaltyAccount(id) {
     });
 }
 
-export function getRewards(id, quantity = 1) {
-    const rewards = {
-        "3734d679-6773-be7f-ff02-e7b08315cb25": 200,
-        "37b71638-aace-468f-91c3-44f04fc00876": 200,
-        "b5d23057-aa7e-24c0-230e-6253b97180e9": 200,
-        "01dd9847-c096-0480-7d57-b263062a60a7": 50,
-        "d094eea3-7fff-c37b-814b-df295b69c252": 50,
-        "3fe81feb-4c11-f10c-4e76-1e4e103c1f60": 50,
-        "0e142457-2847-133d-67c6-dd49d7a7d769": 100,
-        "7e5934a5-6a9b-92f4-9ba4-2fb684aa35d2": 100,
-        "de741443-a2c0-168e-4630-d406efbb2ae9": 100,
-    }
-
-    let points = 0;
-
-    if (id in rewards) {
-        points = rewards[id] * quantity;
-    }
-
-    return points;
-}
 
 /**
  * @param {String} memberId The identity of the member or contact
@@ -94,13 +86,26 @@ export async function addPoints(memberId, points, description = "", appId = LOYA
 
 }
 
-export function givePointsToBox(buyerInfo, lineItems) {
+export function givePointsToBox(buyerInfo, lineItems = []) {
 
     const { id: contactId } = buyerInfo;
     const item = lineItems[0];
     const { productId, quantity = 1, name } = item;
 
-    const points = getRewards(productId, quantity);
+
+    let points = 0;
+
+    let tmp = isProductBox(productId);
+
+    if (tmp !== false) {
+        points = tmp * quantity;
+    }
+
+
+    if(points === 0) {
+        return true;
+    }
+
     const description = `${points} points credited for the subscription of ${name}.`;
 
     addPoints(contactId, points, description, LOYALTY_APP_ID);
@@ -120,9 +125,28 @@ export function getRollsPurchased(inputString) {
     return match ? parseInt(match[0], 10) : 1;
 }
 
-const STANDARD_PONTS = 25;
 
-export function getPointsFromItems(items) {
+
+export function givePointsToItems(buyerInfo, lineItems = []) {
+
+    const { id: contactId } = buyerInfo;
+    
+    let boxes = [];
+
+    let items = lineItems.filter( async (item) => {
+        const productId = item.productId;
+        const merch = await isProductMerch(productId);
+        const box = isProductBox(productId)
+        if(merch === true || box !== false) { 
+            if(box !== false) {
+                boxes.push(item);
+            }
+            return false;
+        } else {
+            return true;
+        }
+
+    });    
 
     let points = 0;
 
@@ -136,10 +160,30 @@ export function getPointsFromItems(items) {
         points += purchased;
     }
 
+    for(let i = 0; i < boxes.length; i++) {
+        let item = items[i];
+        let productId = item.productId
+        let quantity = item?.quantity ?? 1;
+
+        const box = isProductBox(productId)
+
+        if(box !== false) {
+            let purchased = (item?.quantity ?? 1) * box;
+            points += purchased;
+        }
+
+    }
+
+
+    if(points === 0) {
+        return true;
+    }
+
+    addPoints(contactId, points, `Automatic credit of points for purchase.`);
+
+
     return points;
 }
-
-import wixData from 'wix-data';
 
 export function isProductMerch(id) {
     return wixData.query("Stores/Products").eq("_id", id).include("collections").find().then((res) => {
@@ -154,69 +198,10 @@ export function isProductMerch(id) {
     })
 }
 
-export async function applyForSubscription(_id, lineItems, buyerInfo) {
 
-    const recentOrderRes = await wixData.query("mmo").eq("recentOrderId", _id).count({
-        suppressAuth: true,
-        consistentRead: true,        
-    })
-
-    if(recentOrderRes === 1) {
-        return false;
-    }
-
-    let noMerch = false;
-    let points = 0;
-
-    for (let i = 0; i < lineItems.length; i++) {
-
-        const prod = lineItems[i];
-        const productId = prod.productId;
-
-        if (!(await isProductMerch(productId))) {
-            
-            let options = Array.isArray(prod.options) ? prod.options : [];
-            let selection = options?.selection ?? ""
-            
-            // Calculate the point too based on the variant!
-            
-            points += getRollsPurchased(selection) * (prod?.quantity ?? 1) * STANDARD_PONTS;
-            
-            noMerch = true;
-        }
-    }
-
-    if (noMerch) {
-        let dt_obj = new Date();
-        let timeZone = "America/Los_Angeles"
-
-        let day = dt_obj.getDate();
-
-        let db_date = Intl.DateTimeFormat('fr-CA', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            timeZone,
-        }).format(dt_obj);
-
-        await wixData.insert("Orders", {
-            firstOrderId: _id,
-            recentOrderId: _id,
-            placedOn: db_date,
-            day,
-        }, {
-            suppressAuth: true
-        });
-
-
-        const { id: contactId } = buyerInfo;
-
-        await addPoints(contactId, points, "Automatic mix and match order placed");
-
-        return true;
-    }
-
-    return true;
+export function isProductBox(id) {
+    
+    return id in REWARDS ? REWARDS[id] : false;
 }
 
 

@@ -132,19 +132,16 @@ class MontlySubscription extends HTMLElement {
 
     attributeChangedCallback(name, oldValue, newValue) {
         if(name === "checked") {
-            // console.log(document.querySelector(`#${this.price}`));
 
-            if(typeof newValue !== "boolean") {
-                newValue = false;
-            }
-
-            this.radio.checked = newValue;
+            const val = newValue.indexOf("true") !== -1 ? true : ( newValue.indexOf("false") !== -1 ? false : false )
+            this.radio.checked = val;
 
         }
 
         if(name === "price") {
-            // console.log(document.querySelector(`#${this.price}`))
+
             this.price.innerText = newValue;
+
         }
     }
     
@@ -154,3 +151,50 @@ class MontlySubscription extends HTMLElement {
 }
 
 customElements.define('monthly-payment', MontlySubscription);
+
+
+class OneTimeSubscription extends HTMLElement {
+
+    constructor() {
+        super();
+        console.log(DEBUG_TEXT_MONTLY);
+    }
+
+    connectedCallback() {
+        this.appendChild(createLink())
+
+        const { node, id: { price, div, radio } } = createBox(false, false, ONETIME_TEXT);
+
+        this.appendChild(node);
+
+        this.price = price;
+        this.div = div;
+        this.radio = radio;
+
+        // console.log(document.querySelector(this.id));
+    }
+
+    attributeChangedCallback(name, oldValue, newValue) {
+        if(name === "checked") {
+            console.log({oldValue, newValue})
+
+            const val = newValue.indexOf("true") !== -1 ? true : ( newValue.indexOf("false") !== -1 ? false : false )
+            console.log(val);
+            this.radio.checked = val;
+
+            // this.radio.checked = val;
+
+        }
+
+        if(name === "price") {
+            
+            this.price.innerText = newValue;
+        }
+    }
+    
+    static get observedAttributes() {
+        return ["checked", "price"];
+    }
+}
+
+customElements.define('onetime-p', OneTimeSubscription);

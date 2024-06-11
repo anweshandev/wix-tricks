@@ -284,3 +284,50 @@
 		}
 	}
 })();
+
+// NEW CUSTOM CODE
+
+(function() {
+	let checkout = document.querySelector(
+		`div[data-hook="CheckoutButtons.default"]`
+	);
+
+	let total = document.querySelector(`dd[data-hook="Total.formattedValue"]`);
+
+	let secureCheckout = document.querySelector(`div[data-hook="SecureCheckoutDataHook.root"]`);
+
+	let limit = 21;
+
+	let checkoutHide = (cc) => {
+
+		checkout = document.querySelector(`div[data-hook="CheckoutButtons.default"]`);
+		total = document.querySelector(`dd[data-hook="Total.formattedValue"]`);
+		secureCheckout = document.querySelector(`div[data-hook="SecureCheckoutDataHook.root"]`);
+		
+		if(checkout) {
+			checkout.style.display = "none";
+		}
+
+		if(total) {
+			total.parentElement.style.display = "none";
+		}
+
+		if(secureCheckout) {
+			secureCheckout.style.display = "none";
+		}
+
+
+
+		if( checkout || total || secureCheckout ) {
+			limit--;
+
+			if(limit === 0) {
+				clearInterval(cc);
+			}
+		}
+	}
+
+	let cc = setInterval( () => {
+		checkoutHide(cc);
+	}, 3000);
+})();
