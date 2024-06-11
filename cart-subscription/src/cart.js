@@ -197,6 +197,7 @@ $w.onReady(function () {
 
             let res = await wixData.query("CustomPlans").ne("used", true).eq("cartId", cartId).find();
             let planId;
+            const crt = await cart.getCurrentCart()
 
             if(res.totalCount >= 1) {
                 console.log("Enter update");
@@ -225,8 +226,14 @@ $w.onReady(function () {
 
                 await wixData.update("CustomPlans", {
                     ...firstOne,
+                    checkoutId: checkoutid,
+                    cartId: cartId,
                     lineItems: theLineItems,
+                    used: false,
+                    orderId: "TBD",
+                    planId: planInfo._id,
                     total: totalAmt,
+                    totals: crt.totals,
                 })
 
 
@@ -234,7 +241,7 @@ $w.onReady(function () {
                 const planInfo = await createPlan(totalAmt, "Mix&Match Bundle", (await createDescription(theLineItems)));
                 planId = planInfo._id;
 
-                const crt = await cart.getCurrentCart()
+                
 
                 // cart.getCurrentCart().then( (res) => res.)
 
